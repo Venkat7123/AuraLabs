@@ -1,0 +1,255 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Plus, Sparkles, TrendingUp, BookOpen, Search } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import StreakGrid from '@/components/StreakGrid';
+import SubjectCard from '@/components/SubjectCard';
+import { getUser, getSubjects, getCurrentStreak } from '@/lib/storage';
+
+export default function DashboardPage() {
+    const router = useRouter();
+    const [user, setUser] = useState(null);
+    const [subjects, setSubjects] = useState([]);
+    const [mounted, setMounted] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        const u = getUser();
+        if (!u) {
+            router.push('/login');
+            return;
+        }
+        setUser(u);
+        setSubjects(getSubjects());
+        setMounted(true);
+    }, [router]);
+
+    if (!mounted) return null;
+
+    const streak = getCurrentStreak();
+    const totalTopics = subjects.reduce((sum, s) => sum + (s.syllabus?.length || 0), 0);
+    const passedTopics = subjects.reduce((sum, s) => {
+        return sum + Object.values(s.progress || {}).filter(p => p.passed).length;
+    }, 0);
+
+    return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
+            <Navbar />
+
+            <main style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px' }}>
+                {/* Hero */}
+                <div className="animate-fade-in" style={{ marginBottom: 40 }}>
+                    <h1 style={{
+                        fontSize: 'clamp(1.75rem, 4vw, 2.75rem)',
+                        fontWeight: 800,
+                        letterSpacing: '-0.03em',
+                        lineHeight: 1.2,
+                        marginBottom: 8,
+                    }}>
+                        Hello, <span className="gradient-text">{user?.name || 'Learner'}</span>
+                    </h1>
+                    <p style={{
+                        fontSize: '1.0625rem',
+                        color: 'var(--text-secondary)',
+                    }}>Ready to continue your learning journey?</p>
+                </div>
+
+                {/* Stats Row */}
+                <div className="animate-slide-up stagger-children" style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: 16,
+                    marginBottom: 32,
+                }}>
+                    {[
+                        { icon: BookOpen, label: 'Subjects', value: subjects.length, color: '#6366f1' },
+                        { icon: TrendingUp, label: 'Topics Completed', value: `${passedTopics}/${totalTopics}`, color: '#10b981' },
+                        { icon: Sparkles, label: 'Day Streak', value: streak, color: '#f59e0b' },
+                    ].map((stat, i) => (
+                        <div key={i} className="card" style={{
+                            padding: '20px 24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 16,
+                        }}>
+                            <div style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: 12,
+                                background: `${stat.color}15`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                            }}>
+                                <stat.icon size={22} style={{ color: stat.color }} />
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '1.375rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                    {stat.value}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {stat.label}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Streak Section */}
+                <div className="card animate-slide-up" style={{
+                    padding: '24px',
+                    marginBottom: 32,
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 16,
+                    }}>
+                        <h2 style={{
+                            fontSize: '1rem',
+                            fontWeight: 700,
+                            color: 'var(--text-primary)',
+                        }}>Learning Activity</h2>
+                        <span style={{
+                            fontSize: '0.8125rem',
+                            color: 'var(--text-muted)',
+                        }}>Last 26 weeks</span>
+                    </div>
+                    <StreakGrid />
+                </div>
+
+                {/* Subjects Header */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: 20,
+                    gap: 16,
+                    flexWrap: 'wrap',
+                }}>
+                    <h2 style={{
+                        fontSize: '1.25rem',
+                        fontWeight: 700,
+                        color: 'var(--text-primary)',
+                    }}>Your Subjects</h2>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flex: 1,
+                        justifyContent: 'flex-end',
+                    }}>
+                        <div style={{
+                            position: 'relative',
+                            maxWidth: 280,
+                            flex: 1,
+                        }}>
+                            <Search size={16} style={{
+                                position: 'absolute',
+                                left: 12,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                color: 'var(--text-muted)',
+                                pointerEvents: 'none',
+                            }} />
+                            <input
+                                className="input"
+                                placeholder="Search subjects..."
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                style={{
+                                    paddingLeft: 36,
+                                    padding: '8px 14px 8px 36px',
+                                    fontSize: '0.8125rem',
+                                    height: 38,
+                                }}
+                            />
+                        </div>
+                        <button
+                            className="btn-primary"
+                            onClick={() => router.push('/add')}
+                            style={{ padding: '8px 20px', fontSize: '0.8125rem', height: 38, flexShrink: 0 }}
+                        >
+                            <Plus size={16} />
+                            Add Subject
+                        </button>
+                    </div>
+                </div>
+
+                {/* Subject Grid */}
+                {subjects.length === 0 ? (
+                    <div className="card animate-fade-in" style={{
+                        padding: '60px 24px',
+                        textAlign: 'center',
+                    }}>
+                        <div style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 20,
+                            background: 'var(--bg-secondary)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 20px',
+                        }}>
+                            <BookOpen size={32} style={{ color: 'var(--text-muted)' }} />
+                        </div>
+                        <h3 style={{
+                            fontSize: '1.125rem',
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            marginBottom: 8,
+                        }}>No subjects yet</h3>
+                        <p style={{
+                            color: 'var(--text-muted)',
+                            marginBottom: 24,
+                            fontSize: '0.875rem',
+                        }}>Add your first subject to start your AI-powered learning journey</p>
+                        <button
+                            className="btn-primary"
+                            onClick={() => router.push('/add')}
+                        >
+                            <Plus size={16} />
+                            Create Your First Subject
+                        </button>
+                    </div>
+                ) : (
+                    <div className="stagger-children" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                        gap: 20,
+                    }}>
+                        {subjects
+                            .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .map(s => (
+                                <SubjectCard key={s.id} subject={s} />
+                            ))}
+                    </div>
+                )}
+            </main>
+
+            {/* FAB (mobile) */}
+            <button
+                className="btn-primary md:hidden"
+                onClick={() => router.push('/add')}
+                style={{
+                    position: 'fixed',
+                    bottom: 24,
+                    right: 24,
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    padding: 0,
+                    boxShadow: 'var(--shadow-lg)',
+                    zIndex: 50,
+                }}
+            >
+                <Plus size={24} />
+            </button>
+        </div>
+    );
+}
