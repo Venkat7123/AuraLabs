@@ -6,27 +6,43 @@ import { Plus, Sparkles, TrendingUp, BookOpen, Search } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import StreakGrid from '@/components/StreakGrid';
 import SubjectCard from '@/components/SubjectCard';
-import { getUser, getSubjects, getCurrentStreak } from '@/lib/storage';
+import { getCurrentStreak } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/api';
 
 export default function DashboardPage() {
     const router = useRouter();
-    const [user, setUser] = useState(null);
+    const { user, loading: authLoading } = useAuth();
     const [subjects, setSubjects] = useState([]);
     const [mounted, setMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [subjectsLoading, setSubjectsLoading] = useState(true);
 
     useEffect(() => {
-        const u = getUser();
-        if (!u) {
+        if (!authLoading && !user) {
             router.push('/login');
             return;
         }
-        setUser(u);
-        setSubjects(getSubjects());
-        setMounted(true);
-    }, [router]);
 
-    if (!mounted) return null;
+        if (user) {
+            const fetchSubjects = async () => {
+                try {
+                    const data = await apiFetch('/api/subjects');
+                    setSubjects(data || []);
+                } catch (error) {
+                    console.error('Failed to fetch subjects:', error);
+                } finally {
+                    setSubjectsLoading(false);
+                }
+            };
+            fetchSubjects();
+            setMounted(true);
+        }
+    }, [user, authLoading, router]);
+
+    if (authLoading || !mounted) return null;
+
+    const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Learner';
 
     const streak = getCurrentStreak();
     const totalTopics = subjects.reduce((sum, s) => sum + (s.syllabus?.length || 0), 0);
@@ -48,7 +64,7 @@ export default function DashboardPage() {
                         lineHeight: 1.2,
                         marginBottom: 8,
                     }}>
-                        Hello, <span className="gradient-text">{user?.name || 'Learner'}</span>
+                        Hello, <span className="gradient-text">{displayName}</span>
                     </h1>
                     <p style={{
                         fontSize: '1.0625rem',

@@ -1,17 +1,22 @@
 'use client';
 
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Home() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
   useEffect(() => {
-    const user = localStorage.getItem('auralab-user');
-    if (user) {
-      window.location.href = '/dashboard';
-    } else {
-      window.location.href = '/login';
+    if (!loading) {
+      if (user) {
+        router.replace('/dashboard');
+      } else {
+        router.replace('/login');
+      }
     }
-  }, []);
+  }, [user, loading, router]);
 
   return (
     <div style={{

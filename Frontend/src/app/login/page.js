@@ -3,21 +3,24 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, LogIn, ArrowRight } from 'lucide-react';
-import { saveUser, genId } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { signIn } from '@/lib/auth';
 
 export default function LoginPage() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [form, setForm] = useState({ email: '', password: '' });
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
-        const user = localStorage.getItem('auralab-user');
-        if (user) router.replace('/dashboard');
-    }, [router]);
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         if (!form.email || !form.password) {
@@ -25,15 +28,14 @@ export default function LoginPage() {
             return;
         }
         setLoading(true);
-        setTimeout(() => {
-            saveUser({
-                id: genId(),
-                name: form.email.split('@')[0],
-                email: form.email,
-                createdAt: Date.now(),
-            });
-            router.push('/dashboard');
-        }, 600);
+        try {
+            const { error: signInError } = await signIn(form.email, form.password);
+            if (signInError) throw signInError;
+            // Success: AuthContext will pick up the change and we'll redirect via the useEffect
+        } catch (err) {
+            setError(err.message || 'Failed to sign in');
+            setLoading(false);
+        }
     };
 
     return (
