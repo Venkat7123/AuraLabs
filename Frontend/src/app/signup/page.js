@@ -3,21 +3,25 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
-import { saveUser, genId } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { signUp } from '@/lib/auth';
 
 export default function SignupPage() {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
 
     useEffect(() => {
-        const user = localStorage.getItem('auralab-user');
-        if (user) router.replace('/dashboard');
-    }, [router]);
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         if (!form.name || !form.email || !form.password || !form.confirm) {
@@ -33,15 +37,21 @@ export default function SignupPage() {
             return;
         }
         setLoading(true);
-        setTimeout(() => {
-            saveUser({
-                id: genId(),
-                name: form.name,
-                email: form.email,
-                createdAt: Date.now(),
-            });
-            router.push('/dashboard');
-        }, 600);
+        try {
+            const { data, error: signUpError } = await signUp(form.email, form.password, form.name);
+            if (signUpError) throw signUpError;
+
+            // If email confirmation is enabled, they might not be auto-logged in
+            if (data?.session) {
+                // Auto-logged in
+            } else {
+                setSuccess(true);
+                setLoading(false);
+            }
+        } catch (err) {
+            setError(err.message || 'Failed to create account');
+            setLoading(false);
+        }
     };
 
     return (

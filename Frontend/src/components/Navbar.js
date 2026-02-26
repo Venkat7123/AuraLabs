@@ -4,19 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Sun, Moon, Flame, ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
-import { getUser, clearUser, getCurrentStreak } from '@/lib/storage';
+import { getCurrentStreak } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Navbar() {
     const { theme, toggleTheme } = useTheme();
     const router = useRouter();
     const pathname = usePathname();
-    const [user, setUser] = useState(null);
+    const { user, signOut } = useAuth();
     const [streak, setStreak] = useState(0);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
     useEffect(() => {
-        setUser(getUser());
         setStreak(getCurrentStreak());
     }, []);
 
@@ -31,12 +31,13 @@ export default function Navbar() {
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
-    const handleLogout = () => {
-        clearUser();
+    const handleLogout = async () => {
+        await signOut();
         router.push('/login');
     };
 
-    const avatarLetter = user?.name?.charAt(0)?.toUpperCase() || 'U';
+    const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User';
+    const avatarLetter = displayName.charAt(0).toUpperCase();
 
     return (
         <nav style={{
@@ -174,7 +175,7 @@ export default function Navbar() {
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                         }}>
-                            {user?.name || 'User'}
+                            {displayName}
                         </span>
 
                         <ChevronDown size={13} style={{
