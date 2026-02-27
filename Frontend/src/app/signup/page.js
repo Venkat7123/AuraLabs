@@ -3,21 +3,24 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
-import { saveUser, genId } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
 
 export default function SignupPage() {
     const router = useRouter();
+    const { user, loading: authLoading, signUp } = useAuth();
     const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
     const [showPass, setShowPass] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState(false);
 
     useEffect(() => {
-        const user = localStorage.getItem('auralab-user');
-        if (user) router.replace('/dashboard');
-    }, [router]);
+        if (!authLoading && user) {
+            router.replace('/dashboard');
+        }
+    }, [user, authLoading, router]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         if (!form.name || !form.email || !form.password || !form.confirm) {
@@ -33,15 +36,14 @@ export default function SignupPage() {
             return;
         }
         setLoading(true);
-        setTimeout(() => {
-            saveUser({
-                id: genId(),
-                name: form.name,
-                email: form.email,
-                createdAt: Date.now(),
-            });
-            router.push('/dashboard');
-        }, 600);
+        try {
+            await signUp({ email: form.email, password: form.password, name: form.name });
+            setSuccess(true);
+        } catch (err) {
+            setError(err.message || 'Failed to sign up');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -174,7 +176,7 @@ export default function SignupPage() {
                                 <input
                                     className="input"
                                     type="text"
-                                    placeholder="John Doe"
+                                    placeholder="Enter your name"
                                     value={form.name}
                                     onChange={e => setForm({ ...form, name: e.target.value })}
                                     style={{ paddingLeft: 44 }}
@@ -195,7 +197,7 @@ export default function SignupPage() {
                                 <input
                                     className="input"
                                     type="email"
-                                    placeholder="you@example.com"
+                                    placeholder="Enter your email"
                                     value={form.email}
                                     onChange={e => setForm({ ...form, email: e.target.value })}
                                     style={{ paddingLeft: 44 }}

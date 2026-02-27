@@ -6,32 +6,80 @@ import { Plus, Sparkles, TrendingUp, BookOpen, Search } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import StreakGrid from '@/components/StreakGrid';
 import SubjectCard from '@/components/SubjectCard';
-import { getUser, getSubjects, getCurrentStreak } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/utils/api';
+
+const calcStreak = (data) => {
+    let count = 0;
+    let d = new Date();
+    while (true) {
+        const k = d.toISOString().split('T')[0];
+        if (data[k]) {
+            count++;
+            d.setDate(d.getDate() - 1);
+        } else {
+            break;
+        }
+    }
+    return count;
+};
 
 export default function DashboardPage() {
     const router = useRouter();
-    const [user, setUser] = useState(null);
+    const { user, loading: authLoading } = useAuth();
     const [subjects, setSubjects] = useState([]);
+    const [streak, setStreak] = useState(0);
     const [mounted, setMounted] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [subjectsLoading, setSubjectsLoading] = useState(true);
+    const [deleting, setDeleting] = useState(null);
+
+    const handleDelete = async (id) => {
+        setDeleting(id);
+        try {
+            await apiFetch(`/api/subjects/${id}`, { method: 'DELETE' });
+            setSubjects(prev => prev.filter(s => s.id !== id));
+        } catch (e) {
+            console.error('Delete error:', e);
+            alert('Failed to delete subject.');
+        } finally {
+            setDeleting(null);
+        }
+    };
 
     useEffect(() => {
-        const u = getUser();
-        if (!u) {
+        if (!authLoading && !user) {
             router.push('/login');
             return;
         }
-        setUser(u);
-        setSubjects(getSubjects());
-        setMounted(true);
-    }, [router]);
 
-    if (!mounted) return null;
+        if (user) {
+            const loadDashboard = async () => {
+                try {
+                    const [subjects, streakData] = await Promise.all([
+                        apiFetch('/api/subjects'),
+                        apiFetch('/api/user/streak'),
+                    ]);
+                    setSubjects(subjects || []);
+                    setStreak(calcStreak(streakData || {}));
+                } catch (e) {
+                    console.error('Dashboard load error:', e);
+                } finally {
+                    setSubjectsLoading(false);
+                }
+            };
+            loadDashboard();
+            setMounted(true);
+        }
+    }, [user, authLoading, router]);
 
-    const streak = getCurrentStreak();
-    const totalTopics = subjects.reduce((sum, s) => sum + (s.syllabus?.length || 0), 0);
+    if (authLoading || !mounted) return null;
+
+    const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Learner';
+
+    const totalTopics = subjects.reduce((sum, s) => sum + (s.topics?.length || 0), 0);
     const passedTopics = subjects.reduce((sum, s) => {
-        return sum + Object.values(s.progress || {}).filter(p => p.passed).length;
+        return sum + (s.topics || []).filter(t => t.passed).length;
     }, 0);
 
     return (
@@ -48,7 +96,7 @@ export default function DashboardPage() {
                         lineHeight: 1.2,
                         marginBottom: 8,
                     }}>
-                        Hello, <span className="gradient-text">{user?.name || 'Learner'}</span>
+                        Hello, <span className="gradient-text">{displayName}</span>
                     </h1>
                     <p style={{
                         fontSize: '1.0625rem',
@@ -226,7 +274,7 @@ export default function DashboardPage() {
                         {subjects
                             .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
                             .map(s => (
-                                <SubjectCard key={s.id} subject={s} />
+                                <SubjectCard key={s.id} subject={s} onDelete={handleDelete} />
                             ))}
                     </div>
                 )}

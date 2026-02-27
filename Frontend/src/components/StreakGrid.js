@@ -1,11 +1,24 @@
 'use client';
 
-import { useMemo } from 'react';
-import { getStreakData } from '@/lib/storage';
+import { useState, useEffect, useMemo } from 'react';
+import { apiFetch } from '@/utils/api';
 
 export default function StreakGrid() {
+    const [streakData, setStreakData] = useState({});
+
+    useEffect(() => {
+        const fetchStreak = async () => {
+            try {
+                const data = await apiFetch('/api/user/streak');
+                setStreakData(data || {});
+            } catch (e) {
+                console.error('Failed to fetch streak data:', e);
+            }
+        };
+        fetchStreak();
+    }, []);
+
     const data = useMemo(() => {
-        const streakData = getStreakData();
         const weeks = 26;
         const days = [];
         const today = new Date();
@@ -25,7 +38,7 @@ export default function StreakGrid() {
             });
         }
         return days;
-    }, []);
+    }, [streakData]);
 
     const weeks = [];
     for (let i = 0; i < data.length; i += 7) {

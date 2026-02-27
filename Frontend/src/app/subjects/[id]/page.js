@@ -7,39 +7,66 @@ import {
     BarChart3, Flame, Calendar, Target, Sparkles, Trophy
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import {
-    getSubject, getSubjectProgress, getCurrentTopicIndex,
-    isTopicPassed
-} from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/utils/api';
 
 export default function SubjectDetailPage() {
     const params = useParams();
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [subject, setSubject] = useState(null);
     const [mounted, setMounted] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!authLoading && !user) {
+            router.push('/login');
+            return;
+        }
+
         const id = params?.id;
-        if (!id) return;
-        const s = getSubject(id);
-        if (!s) { router.push('/dashboard'); return; }
-        setSubject(s);
-        setMounted(true);
-    }, [params?.id, router]);
+        if (!id || !user) return;
 
-    const progress = useMemo(() => subject ? getSubjectProgress(subject.id) : 0, [subject]);
-    const currentIdx = useMemo(() => subject ? getCurrentTopicIndex(subject.id) : 0, [subject]);
-    const syllabus = subject?.syllabus || [];
+        const fetchSubject = async () => {
+            try {
+                const data = await apiFetch(`/api/subjects/${id}`);
+                setSubject(data);
+                setMounted(true);
+            } catch (error) {
+                console.error('Failed to fetch subject:', error);
+                router.push('/dashboard');
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSubject();
+    }, [params?.id, user, authLoading, router]);
+
+    const topics = subject?.topics || [];
+
+    const progress = useMemo(() => {
+        if (!topics.length) return 0;
+        const passed = topics.filter(t => t.passed).length;
+        return Math.round((passed / topics.length) * 100);
+    }, [topics]);
+
+    const currentIdx = useMemo(() => {
+        if (!topics.length) return 0;
+        const idx = topics.findIndex(t => !t.passed);
+        return idx === -1 ? topics.length - 1 : idx;
+    }, [topics]);
+
     const completedCount = useMemo(
-        () => syllabus.filter((_, i) => subject && isTopicPassed(subject.id, i)).length,
-        [subject, syllabus]
+        () => topics.filter(t => t.passed).length,
+        [topics]
     );
-    const remainingCount = syllabus.length - completedCount;
+    const remainingCount = topics.length - completedCount;
 
-    // Calculate days left based on createdAt + duration
+    // Calculate days left based on created_at + duration
     const daysLeft = useMemo(() => {
-        if (!subject?.createdAt || !subject?.duration) return null;
-        const endDate = new Date(subject.createdAt + subject.duration * 7 * 24 * 60 * 60 * 1000);
+        if (!subject?.created_at || !subject?.duration) return null;
+        const createdAtTime = new Date(subject.created_at).getTime();
+        const endDate = new Date(createdAtTime + subject.duration * 7 * 24 * 60 * 60 * 1000);
         const now = new Date();
         const diff = Math.max(0, Math.ceil((endDate - now) / (1000 * 60 * 60 * 24)));
         return diff;
@@ -184,7 +211,7 @@ export default function SubjectDetailPage() {
                                     color: 'var(--text-secondary)',
                                     marginBottom: 4,
                                 }}>
-                                    {completedCount} of {syllabus.length} topics completed
+                                    {completedCount} of {topics.length} topics completed
                                 </div>
                                 <div className="progress-bar" style={{ height: 8, borderRadius: 6 }}>
                                     <div className="progress-fill" style={{
@@ -296,13 +323,13 @@ export default function SubjectDetailPage() {
                             padding: '4px 12px',
                             borderRadius: 20,
                         }}>
-                            {syllabus.length} topics
+                            {topics.length} topics
                         </span>
                     </div>
 
                     <div style={{ display: 'grid', gap: 6 }}>
-                        {syllabus.map((topic, idx) => {
-                            const passed = isTopicPassed(subject.id, idx);
+                        {topics.map((topic, idx) => {
+                            const passed = topic.passed;
                             const isCurrent = idx === currentIdx;
                             const isLocked = idx > currentIdx && !passed;
 
@@ -417,7 +444,7 @@ export default function SubjectDetailPage() {
                             color: 'var(--text-primary)',
                         }}>Subject Complete! 🎉</h3>
                         <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                            You&apos;ve mastered all {syllabus.length} topics. Great job!
+                            You&apos;ve mastered all {topics.length} topics. Great job!
                         </p>
                     </div>
                 )}

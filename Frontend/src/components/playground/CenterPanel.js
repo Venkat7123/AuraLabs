@@ -61,7 +61,7 @@ export default function CenterPanel({ subject, currentTopicIdx, activeMode, setA
     const [quizState, setQuizState] = useState(null);
     const [focusWarning, setFocusWarning] = useState(false);
 
-    const topic = subject?.syllabus?.[currentTopicIdx]?.title || 'Getting Started';
+    const topic = subject?.topics?.[currentTopicIdx]?.title || 'Getting Started';
 
     // Focus mode — detect tab switch
     useEffect(() => {

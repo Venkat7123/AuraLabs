@@ -8,34 +8,17 @@ import {
     Plus
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { saveSubject, genId, getUser } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/utils/api';
 
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const INTENSITIES = ['Casual', 'Regular', 'Intensive', 'Hardcore'];
 
-const SAMPLE_SYLLABI = {
-    'JavaScript': [
-        'Variables & Data Types', 'Functions & Scope', 'Arrays & Objects',
-        'DOM Manipulation', 'Events & Listeners', 'Async JavaScript & Promises',
-        'Fetch API & HTTP', 'ES6+ Features', 'Error Handling', 'Modules & Bundlers',
-    ],
-    'Python': [
-        'Syntax & Variables', 'Control Flow', 'Functions', 'Data Structures',
-        'OOP Concepts', 'File I/O', 'Error Handling', 'Modules & Packages',
-        'Decorators & Generators', 'Working with APIs',
-    ],
-    'Machine Learning': [
-        'Introduction to ML', 'Linear Regression', 'Logistic Regression',
-        'Decision Trees & Random Forests', 'SVM', 'Clustering Algorithms',
-        'Neural Networks Basics', 'Deep Learning Intro', 'Model Evaluation',
-        'Real-World ML Projects',
-    ],
-    default: [
-        'Introduction & Fundamentals', 'Core Concepts', 'Practical Applications',
-        'Intermediate Techniques', 'Advanced Topics', 'Problem Solving',
-        'Real-World Projects', 'Review & Assessment',
-    ],
-};
+// simple client-side id generator for local topic items (UI only)
+const genId = () =>
+    Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+
 
 export default function AddSubjectPage() {
     const router = useRouter();
@@ -54,41 +37,76 @@ export default function AddSubjectPage() {
     const [editText, setEditText] = useState('');
     const [newTopic, setNewTopic] = useState('');
     const [dragIdx, setDragIdx] = useState(-1);
+    const [generating, setGenerating] = useState(false);
+    const [genError, setGenError] = useState('');
+    const { user, loading: authLoading } = useAuth();
 
     useEffect(() => {
-        const u = getUser();
-        if (!u) { router.push('/login'); return; }
-        setMounted(true);
-    }, [router]);
+        if (!authLoading && !user) {
+            router.push('/login');
+            return;
+        }
+        if (user) setMounted(true);
+    }, [user, authLoading, router]);
 
-    if (!mounted) return null;
+    if (!mounted || authLoading) return null;
 
-    const generateSyllabus = () => {
-        const key = Object.keys(SAMPLE_SYLLABI).find(k =>
-            form.name.toLowerCase().includes(k.toLowerCase())
-        ) || 'default';
-        const topics = SAMPLE_SYLLABI[key].map((title, i) => ({
-            id: genId(),
-            title,
-            order: i,
-        }));
-        setForm({ ...form, syllabus: topics });
+    const generateSyllabus = async () => {
+        setGenerating(true);
+        setGenError('');
+        try {
+            const topics = await apiFetch('/api/ai/generate-syllabus', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: form.name,
+                    goal: form.need,
+                    duration: form.duration,
+                    level: form.level,
+                    intensity: form.intensity,
+                }),
+            });
+            if (!Array.isArray(topics) || topics.length === 0) {
+                throw new Error('Backend returned an empty or invalid syllabus.');
+            }
+            setForm({
+                ...form,
+                syllabus: topics.map((t, i) => ({
+                    id: genId(),
+                    title: t.title,
+                    order: i,
+                })),
+            });
+        } catch (err) {
+            console.error('AI syllabus generation failed:', err);
+            setGenError(err.message || 'Failed to generate syllabus. Please check your backend / API key and try again.');
+        } finally {
+            setGenerating(false);
+        }
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const subject = {
-            id: genId(),
             name: form.name,
             need: form.need,
             duration: form.duration,
             level: form.level,
             intensity: form.intensity,
             syllabus: form.syllabus.map((t, i) => ({ ...t, order: i })),
-            progress: {},
-            createdAt: Date.now(),
         };
-        saveSubject(subject);
-        router.push('/dashboard');
+
+        try {
+            await Promise.all([
+                apiFetch('/api/subjects', {
+                    method: 'POST',
+                    body: JSON.stringify(subject),
+                }),
+                apiFetch('/api/user/streak', { method: 'POST' }),
+            ]);
+            router.push('/dashboard');
+        } catch (error) {
+            console.error('Failed to save subject:', error);
+            alert('Failed to save subject. Please try again.');
+        }
     };
 
     const canNext = () => {
@@ -378,14 +396,45 @@ export default function AddSubjectPage() {
                                 <>
                                     {form.syllabus.length === 0 ? (
                                         <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                                            <Sparkles size={40} style={{ color: 'var(--accent)', margin: '0 auto 16px', opacity: 0.5 }} />
-                                            <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: '0.875rem' }}>
-                                                Click below to generate a curriculum for &quot;{form.name}&quot;
-                                            </p>
-                                            <button className="btn-primary" onClick={generateSyllabus}>
-                                                <Sparkles size={16} />
-                                                Generate Syllabus
-                                            </button>
+                                            {generating ? (
+                                                <>
+                                                    <div style={{
+                                                        width: 40, height: 40, margin: '0 auto 16px',
+                                                        border: '3px solid var(--border-color)',
+                                                        borderTopColor: 'var(--accent)',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 0.8s linear infinite',
+                                                    }} />
+                                                    <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                                        Generating syllabus with AI...
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles size={40} style={{ color: 'var(--accent)', margin: '0 auto 16px', opacity: 0.5 }} />
+                                                    <p style={{ color: 'var(--text-muted)', marginBottom: 16, fontSize: '0.875rem' }}>
+                                                        Click below to generate a curriculum for &quot;{form.name}&quot;
+                                                    </p>
+                                                    {genError && (
+                                                        <div style={{
+                                                            background: 'rgba(239,68,68,0.08)',
+                                                            border: '1px solid rgba(239,68,68,0.25)',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            padding: '12px 16px',
+                                                            marginBottom: 16,
+                                                            fontSize: '0.8125rem',
+                                                            color: '#ef4444',
+                                                            textAlign: 'left',
+                                                        }}>
+                                                            {genError}
+                                                        </div>
+                                                    )}
+                                                    <button className="btn-primary" onClick={generateSyllabus}>
+                                                        <Sparkles size={16} />
+                                                        Generate Syllabus
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     ) : (
                                         <div>
@@ -474,10 +523,11 @@ export default function AddSubjectPage() {
                                             <button
                                                 className="btn-ghost"
                                                 onClick={generateSyllabus}
-                                                style={{ marginTop: 12, fontSize: '0.8125rem' }}
+                                                disabled={generating}
+                                                style={{ marginTop: 12, fontSize: '0.8125rem', opacity: generating ? 0.5 : 1 }}
                                             >
                                                 <Sparkles size={14} />
-                                                Regenerate
+                                                {generating ? 'Regenerating...' : 'Regenerate'}
                                             </button>
                                         </div>
                                     )}

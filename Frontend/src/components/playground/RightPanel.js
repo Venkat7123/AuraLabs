@@ -5,7 +5,6 @@ import {
     Send, MessageSquarePlus, History, X, Pencil, Trash2,
     Image as ImageIcon, Sparkles, Bot
 } from 'lucide-react';
-import { getChatHistory, saveChatThread, deleteChatThread } from '@/lib/storage';
 
 function simulateAIResponse(userMsg, topic, mode) {
     const responses = {
@@ -43,14 +42,15 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        if (subject?.id) setThreads(getChatHistory(subject.id));
+        // In mock mode we don't load threads from a backend.
+        setThreads([]);
     }, [subject?.id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isTyping]);
 
-    const sendMessage = useCallback(() => {
+    const sendMessage = useCallback(async () => {
         if (!input.trim()) return;
         const userMsg = { role: 'user', content: input.trim(), time: Date.now() };
         const newMessages = [...messages, userMsg];
@@ -58,24 +58,32 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
         setInput('');
         setIsTyping(true);
 
+        // Simulate AI
         setTimeout(() => {
             const aiContent = simulateAIResponse(input, currentTopic, activeMode);
             const aiMsg = { role: 'ai', content: aiContent, time: Date.now() };
             const final = [...newMessages, aiMsg];
             setMessages(final);
             setIsTyping(false);
+            const chatId = activeThread || `t-${Date.now()}`;
+            const threadName =
+                activeThread
+                    ? threads.find(t => t.id === activeThread)?.name || `Chat about ${currentTopic}`
+                    : `Chat about ${currentTopic}`;
 
-            const thread = {
-                id: activeThread || `t-${Date.now()}`,
-                name: activeThread ? threads.find(t => t.id === activeThread)?.name || `Chat about ${currentTopic}` : `Chat about ${currentTopic}`,
-                messages: final,
-                updatedAt: Date.now(),
-            };
-            if (!activeThread) setActiveThread(thread.id);
-            saveChatThread(subject.id, thread);
-            setThreads(getChatHistory(subject.id));
+            setThreads(prev => {
+                const existing = prev.find(t => t.id === chatId);
+                if (existing) {
+                    return prev.map(t => t.id === chatId ? { ...t, messages: final } : t);
+                }
+                return [...prev, { id: chatId, name: threadName, messages: final }];
+            });
+
+            if (!activeThread) {
+                setActiveThread(chatId);
+            }
         }, 600 + Math.random() * 800);
-    }, [input, messages, activeThread, threads, currentTopic, activeMode, subject?.id]);
+    }, [input, messages, activeThread, threads, currentTopic, activeMode]);
 
     const newChat = () => {
         setMessages([]);
@@ -89,19 +97,19 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
         setShowHistory(false);
     };
 
-    const removeThread = (threadId) => {
-        deleteChatThread(subject.id, threadId);
-        setThreads(getChatHistory(subject.id));
-        if (activeThread === threadId) { setMessages([]); setActiveThread(null); }
+    const removeThread = async (threadId) => {
+        setThreads(prev => prev.filter(t => t.id !== threadId));
+        if (activeThread === threadId) {
+            setMessages([]);
+            setActiveThread(null);
+        }
     };
 
-    const renameThread = (threadId) => {
+    const renameThread = async (threadId) => {
         if (!editName.trim()) return;
         const thread = threads.find(t => t.id === threadId);
         if (thread) {
-            thread.name = editName.trim();
-            saveChatThread(subject.id, thread);
-            setThreads(getChatHistory(subject.id));
+            setThreads(prev => prev.map(t => t.id === threadId ? { ...t, name: editName.trim() } : t));
         }
         setEditingId(null);
         setEditName('');

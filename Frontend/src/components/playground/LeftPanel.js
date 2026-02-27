@@ -2,17 +2,21 @@
 
 import { useState, useMemo } from 'react';
 import { CheckCircle2, Circle, Lock, ChevronDown, ChevronRight, FileText, Image as ImageIcon, BookOpen } from 'lucide-react';
-import { isTopicPassed, getSubjectProgress } from '@/lib/storage';
 
 export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
     const [syllabusOpen, setSyllabusOpen] = useState(true);
     const [libraryOpen, setLibraryOpen] = useState(false);
 
-    const syllabus = subject?.syllabus || [];
-    const progress = useMemo(() => subject ? getSubjectProgress(subject.id) : 0, [subject]);
+    const topics = subject?.topics || [];
+    const progress = useMemo(() => {
+        if (!topics.length) return 0;
+        const passed = topics.filter(t => t.passed).length;
+        return Math.round((passed / topics.length) * 100);
+    }, [topics]);
+
     const completedCount = useMemo(
-        () => syllabus.filter((_, i) => subject && isTopicPassed(subject.id, i)).length,
-        [subject, syllabus]
+        () => topics.filter(t => t.passed).length,
+        [topics]
     );
 
     return (
@@ -52,7 +56,7 @@ export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
                         }} />
                     </div>
                     <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
-                        {completedCount}/{syllabus.length}
+                        {completedCount}/{topics.length}
                     </span>
                 </div>
             </div>
@@ -73,13 +77,13 @@ export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
                     <span style={{
                         marginLeft: 'auto', fontSize: '0.625rem',
                         background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 10,
-                    }}>{syllabus.length}</span>
+                    }}>{topics.length}</span>
                 </button>
 
                 {syllabusOpen && (
                     <div style={{ padding: '0 10px 16px' }}>
-                        {syllabus.map((topic, idx) => {
-                            const passed = isTopicPassed(subject?.id, idx);
+                        {topics.map((topic, idx) => {
+                            const passed = topic.passed;
                             const isCurrent = idx === currentTopicIdx;
                             const isLocked = idx > currentTopicIdx && !passed;
 

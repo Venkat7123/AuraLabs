@@ -1,14 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Play, BookOpen } from 'lucide-react';
-import { getSubjectProgress, getCurrentTopicIndex } from '@/lib/storage';
+import { Play, BookOpen, Trash2 } from 'lucide-react';
 
-export default function SubjectCard({ subject }) {
+export default function SubjectCard({ subject, onDelete }) {
     const router = useRouter();
-    const progress = getSubjectProgress(subject.id);
-    const currentIdx = getCurrentTopicIndex(subject.id);
-    const currentTopic = subject.syllabus?.[currentIdx]?.title || 'Getting Started';
+    
+    const topics = subject.topics || [];
+    const totalTopics = topics.length;
+    const passedTopics = topics.filter(t => t.passed).length;
+    const progress = totalTopics > 0 ? Math.round((passedTopics / totalTopics) * 100) : 0;
+    
+    const currentIdx = topics.findIndex(t => !t.passed);
+    const safeIdx = currentIdx === -1 ? (totalTopics > 0 ? totalTopics - 1 : 0) : currentIdx;
+    const currentTopic = topics[safeIdx]?.title || 'Getting Started';
 
     const accentColors = [
         ['#6366f1', '#8b5cf6'],
@@ -56,18 +62,46 @@ export default function SubjectCard({ subject }) {
                     }}>
                         <BookOpen size={22} style={{ color: colors[0] }} />
                     </div>
-                    <span style={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        color: colors[0],
-                        background: `${colors[0]}15`,
-                        padding: '4px 10px',
-                        borderRadius: 20,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                    }}>
-                        {subject.level || 'Beginner'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                            fontSize: '0.6875rem',
+                            fontWeight: 600,
+                            color: colors[0],
+                            background: `${colors[0]}15`,
+                            padding: '4px 10px',
+                            borderRadius: 20,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                        }}>
+                            {subject.level || 'Beginner'}
+                        </span>
+                        {onDelete && (
+                            <button
+                                title="Delete subject"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Delete this subject and all its topics?')) {
+                                        onDelete(subject.id);
+                                    }
+                                }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: 4,
+                                    borderRadius: 8,
+                                    color: 'var(--text-muted)',
+                                    transition: 'color 0.15s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
+                                onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Title */}

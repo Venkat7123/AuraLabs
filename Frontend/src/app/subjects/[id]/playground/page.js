@@ -15,11 +15,13 @@ const LANGUAGES = [
 import LeftPanel from '@/components/playground/LeftPanel';
 import CenterPanel from '@/components/playground/CenterPanel';
 import RightPanel from '@/components/playground/RightPanel';
-import { getSubject, saveSubject, markTopicPassed, getCurrentTopicIndex, getSubjectProgress } from '@/lib/storage';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/utils/api';
 
 export default function PlaygroundPage() {
     const params = useParams();
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const [subject, setSubject] = useState(null);
     const [currentTopicIdx, setCurrentTopicIdx] = useState(0);
     const [activeMode, setActiveMode] = useState('explain');
@@ -41,14 +43,33 @@ export default function PlaygroundPage() {
     const isDragging = useRef(null);
 
     useEffect(() => {
+        if (!authLoading && !user) {
+            router.push('/login');
+            return;
+        }
+
         const id = params?.id;
-        if (!id) return;
-        const s = getSubject(id);
-        if (!s) { router.push('/dashboard'); return; }
-        setSubject(s);
-        setCurrentTopicIdx(getCurrentTopicIndex(id));
-        setMounted(true);
-    }, [params?.id, router]);
+        if (!id || !user) return;
+
+        const fetchSubject = async () => {
+            try {
+                const data = await apiFetch(`/api/subjects/${id}`);
+                if (!data) { router.push('/dashboard'); return; }
+                setSubject(data);
+
+                // Find first non-passed topic
+                const topics = data.topics || [];
+                const firstIncompleteIdx = topics.findIndex(t => !t.passed);
+                setCurrentTopicIdx(firstIncompleteIdx === -1 ? Math.max(0, topics.length - 1) : firstIncompleteIdx);
+
+                setMounted(true);
+            } catch (error) {
+                console.error('Failed to fetch subject:', error);
+                router.push('/dashboard');
+            }
+        };
+        fetchSubject();
+    }, [params?.id, user, authLoading, router]);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -82,12 +103,37 @@ export default function PlaygroundPage() {
         document.addEventListener('mouseup', handleMouseUp);
     }, []);
 
-    const handleQuizPass = useCallback((topicIdx) => {
-        markTopicPassed(subject.id, topicIdx);
-        const updated = getSubject(subject.id);
-        setSubject(updated);
-        setCurrentTopicIdx(getCurrentTopicIndex(subject.id));
-    }, [subject?.id]);
+    const handleQuizPass = useCallback(async (topicIdx) => {
+        if (!subject) return;
+        const topics = subject.topics || [];
+        const topic = topics[topicIdx];
+        if (!topic) return;
+
+        try {
+            // Mark topic as passed on backend
+            await apiFetch(`/api/topics/${topic.id}/pass`, { method: 'POST' });
+            // Record streak activity
+            await apiFetch('/api/user/streak', { method: 'POST' }).catch(() => {});
+            // Update local state
+            setSubject(prev => {
+                if (!prev) return prev;
+                const newTopics = prev.topics.map((t, i) =>
+                    i === topicIdx ? { ...t, passed: true, passed_at: new Date().toISOString() } : t
+                );
+                return { ...prev, topics: newTopics };
+            });
+        } catch (err) {
+            console.error('Failed to mark topic passed:', err);
+            // Still update local state as fallback
+            setSubject(prev => {
+                if (!prev) return prev;
+                const newTopics = prev.topics.map((t, i) =>
+                    i === topicIdx ? { ...t, passed: true, passed_at: new Date().toISOString() } : t
+                );
+                return { ...prev, topics: newTopics };
+            });
+        }
+    }, [subject]);
 
     const handleSelectTopic = useCallback((idx) => {
         setCurrentTopicIdx(idx);
@@ -96,8 +142,8 @@ export default function PlaygroundPage() {
 
     if (!mounted || !subject) return null;
 
-    const currentTopic = subject.syllabus?.[currentTopicIdx]?.title || 'Getting Started';
-    const progress = getSubjectProgress(subject.id);
+    const currentTopic = subject.topics?.[currentTopicIdx]?.title || 'Getting Started';
+    const progress = Math.round(((subject.topics || []).filter(t => t.passed).length / (subject.topics?.length || 1)) * 100);
 
     // ─── Mobile Layout ─────────────────
     if (isMobile) {
