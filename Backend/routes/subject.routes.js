@@ -5,7 +5,8 @@ import {
   getSubject,
   createSubject,
   updateSubject,
-  deleteSubject
+  deleteSubject,
+  resetSubject
 } from '../controllers/subject.controller.js'
 
 const router = express.Router()
@@ -14,6 +15,7 @@ router.get('/', authMiddleware, getSubjects)
 router.get('/:id', authMiddleware, getSubject)
 router.post('/', authMiddleware, createSubject)
 router.patch('/:id', authMiddleware, updateSubject)
+router.put('/:id/reset', authMiddleware, resetSubject)
 router.delete('/:id', authMiddleware, deleteSubject)
 
 export default router

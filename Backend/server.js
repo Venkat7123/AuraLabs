@@ -7,7 +7,7 @@ config({ path: resolve(__dirname, '.env') })
 
 const { default: app } = await import('./app.js')
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 5000
 
 app.listen(PORT, () => {
   console.log(`AuraLab Backend running on port ${PORT}`)

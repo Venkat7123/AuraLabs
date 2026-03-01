@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Sun, Moon, Flame, ChevronDown, LogOut, Settings, User } from 'lucide-react';
+import { Sun, Moon, Flame, ChevronDown, LogOut, User } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/utils/api';
@@ -18,6 +18,7 @@ export default function Navbar() {
 
     useEffect(() => {
         if (!user) return;
+
         const fetchStreak = async () => {
             try {
                 const streakData = await apiFetch('/api/user/streak');
@@ -35,6 +36,10 @@ export default function Navbar() {
                 setStreak(currentStreak);
             } catch (e) {
                 console.error('Failed to fetch streak:', e);
+                // If it's auth error, reset streak to 0
+                if (e.message.includes('Authentication failed')) {
+                    setStreak(0);
+                }
             }
         };
         fetchStreak();
@@ -253,7 +258,7 @@ export default function Navbar() {
                                     </div>
                                     <div style={{ minWidth: 0 }}>
                                         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {user?.name || 'User'}
+                                            {displayName}
                                         </div>
                                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                             {user?.email || ''}
@@ -264,8 +269,12 @@ export default function Navbar() {
                                 {/* Menu items */}
                                 <div style={{ padding: '6px 0' }}>
                                     {[
-                                        { icon: User, label: 'Profile', onClick: () => setDropdownOpen(false) },
-                                        { icon: Settings, label: 'Settings', onClick: () => setDropdownOpen(false) },
+                                        {
+                                            icon: User, label: 'Profile', onClick: () => {
+                                                setDropdownOpen(false);
+                                                router.push('/profile');
+                                            }
+                                        },
                                     ].map((item, i) => (
                                         <button
                                             key={i}

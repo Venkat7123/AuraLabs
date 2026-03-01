@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
     ArrowLeft, Play, BookOpen, Clock, CheckCircle2, Circle, Lock,
-    BarChart3, Flame, Calendar, Target, Sparkles, Trophy
+    BarChart3, Flame, Calendar, Target, Sparkles, Trophy, Trash2,
+    Settings
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -17,6 +18,8 @@ export default function SubjectDetailPage() {
     const [subject, setSubject] = useState(null);
     const [mounted, setMounted] = useState(false);
     const [loading, setLoading] = useState(true);
+
+
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -71,6 +74,8 @@ export default function SubjectDetailPage() {
         const diff = Math.max(0, Math.ceil((endDate - now) / (1000 * 60 * 60 * 24)));
         return diff;
     }, [subject]);
+
+
 
     const accentColors = [
         ['#6366f1', '#8b5cf6'],
@@ -130,6 +135,75 @@ export default function SubjectDetailPage() {
                         borderRadius: '50%',
                         background: `radial-gradient(circle, ${colors[1]}10 0%, transparent 70%)`,
                     }} />
+
+                    {/* Settings + Delete */}
+                    <div style={{ position: 'absolute', top: 24, right: 24, display: 'flex', gap: 8, zIndex: 20 }}>
+                        <button
+                            onClick={() => router.push(`/subjects/${subject.id}/settings`)}
+                            title="Project Settings"
+                            style={{
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 12,
+                                width: 36, height: 36,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)',
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = 'var(--accent)';
+                                e.currentTarget.style.color = 'var(--accent)';
+                                e.currentTarget.style.background = 'rgba(99,102,241,0.08)';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
+                                e.currentTarget.style.color = 'var(--text-muted)';
+                                e.currentTarget.style.background = 'var(--bg-secondary)';
+                            }}
+                        >
+                            <Settings size={16} />
+                        </button>
+                        <button
+                            onClick={async () => {
+                                if (confirm('Are you certain you want to delete this subject? This cannot be undone.')) {
+                                    try {
+                                        await apiFetch(`/api/subjects/${subject.id}`, { method: 'DELETE' });
+                                        router.push('/dashboard');
+                                    } catch (e) {
+                                        console.error(e);
+                                        alert('Failed to delete subject');
+                                    }
+                                }
+                            }}
+                            title="Delete Subject"
+                            style={{
+                                background: 'var(--bg-secondary)',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 12,
+                                width: 36,
+                                height: 36,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: 'var(--text-muted)',
+                                transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = '#ef4444';
+                                e.currentTarget.style.color = '#ef4444';
+                                e.currentTarget.style.background = '#ef444410';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
+                                e.currentTarget.style.color = 'var(--text-muted)';
+                                e.currentTarget.style.background = 'var(--bg-secondary)';
+                            }}
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
 
                     <div style={{ position: 'relative', zIndex: 1 }}>
                         {/* Level Badge */}
@@ -223,21 +297,51 @@ export default function SubjectDetailPage() {
                             </div>
                         </div>
 
-                        {/* Start Learning CTA */}
-                        <button
-                            className="btn-primary"
-                            onClick={() => router.push(`/subjects/${subject.id}/playground`)}
-                            style={{
-                                padding: '14px 36px',
-                                fontSize: '1rem',
-                                fontWeight: 700,
-                                background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
-                                borderRadius: 'var(--radius-md)',
-                            }}
-                        >
-                            <Play size={20} />
-                            {progress > 0 ? 'Continue Learning' : 'Start Learning'}
-                        </button>
+                        {/* CTA Buttons */}
+                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <button
+                                className="btn-primary"
+                                onClick={() => router.push(`/subjects/${subject.id}/playground`)}
+                                style={{
+                                    padding: '14px 36px',
+                                    fontSize: '1rem',
+                                    fontWeight: 700,
+                                    background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
+                                    borderRadius: 'var(--radius-md)',
+                                }}
+                            >
+                                <Play size={20} />
+                                {progress > 0 ? 'Continue Learning' : 'Start Learning'}
+                            </button>
+                            <button
+                                onClick={() => router.push(`/subjects/${subject.id}/homework`)}
+                                style={{
+                                    padding: '14px 28px',
+                                    fontSize: '1rem',
+                                    fontWeight: 700,
+                                    borderRadius: 'var(--radius-md)',
+                                    border: `2px solid ${colors[0]}35`,
+                                    background: `${colors[0]}08`,
+                                    color: colors[0],
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = `${colors[0]}15`;
+                                    e.currentTarget.style.borderColor = `${colors[0]}50`;
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = `${colors[0]}08`;
+                                    e.currentTarget.style.borderColor = `${colors[0]}35`;
+                                }}
+                            >
+                                <BookOpen size={20} />
+                                Homework
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -449,6 +553,7 @@ export default function SubjectDetailPage() {
                     </div>
                 )}
             </main>
+
         </div>
     );
 }

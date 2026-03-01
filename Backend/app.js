@@ -4,21 +4,35 @@ import cors from 'cors'
 import subjectRoutes from './routes/subject.routes.js'
 import topicRoutes from './routes/topic.routes.js'
 import aiRoutes from './routes/ai.routes.js'
+import profileRoutes from './routes/profile.routes.js'
 import streakRoutes from './routes/streak.routes.js'
 import { errorHandler } from './middleware/error.middleware.js'
+import pdfRoutes from "./routes/pdf.routes.js"
+import scanRoutes from "./routes/scan.routes.js"
+import contentRoutes from "./routes/content.routes.js"
+import chatRoutes from "./routes/chat.routes.js"
 
 const app = express()
 
 // ── Middleware ──────────────────────────────────────────────
-app.use(cors())
+app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}))
 app.use(express.json())
 
 // ── Routes ─────────────────────────────────────────────────
 app.use('/api/subjects', subjectRoutes)
 app.use('/api/topics', topicRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/profile', profileRoutes)
 app.use('/api/user/streak', streakRoutes)
-
+app.use("/api/pdf", pdfRoutes)
+app.use("/api/scan", scanRoutes)
+app.use("/api/content", contentRoutes)
+app.use("/api/chat", chatRoutes)
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 

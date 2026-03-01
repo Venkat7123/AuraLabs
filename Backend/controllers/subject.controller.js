@@ -44,3 +44,12 @@ export const deleteSubject = async (req, res, next) => {
     next(err)
   }
 }
+
+export const resetSubject = async (req, res, next) => {
+  try {
+    const data = await subjectService.resetAndUpdateSubject(req.supabase, req.user.id, req.params.id, req.body)
+    res.json(data)
+  } catch (err) {
+    next(err)
+  }
+}

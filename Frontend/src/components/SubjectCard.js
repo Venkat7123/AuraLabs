@@ -2,16 +2,21 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Play, BookOpen, Trash2 } from 'lucide-react';
+import { Play, BookOpen, Trash2, ImagePlus, Languages } from 'lucide-react';
+import { apiFetch } from '@/utils/api';
+
+const LANG_FLAGS = {
+    English: '🇬🇧', Tamil: '🇮🇳', Telugu: '🇮🇳', Kannada: '🇮🇳', Hindi: '🇮🇳',
+};
 
 export default function SubjectCard({ subject, onDelete }) {
     const router = useRouter();
-    
+
     const topics = subject.topics || [];
     const totalTopics = topics.length;
     const passedTopics = topics.filter(t => t.passed).length;
     const progress = totalTopics > 0 ? Math.round((passedTopics / totalTopics) * 100) : 0;
-    
+
     const currentIdx = topics.findIndex(t => !t.passed);
     const safeIdx = currentIdx === -1 ? (totalTopics > 0 ? totalTopics - 1 : 0) : currentIdx;
     const currentTopic = topics[safeIdx]?.title || 'Getting Started';
@@ -75,6 +80,21 @@ export default function SubjectCard({ subject, onDelete }) {
                         }}>
                             {subject.level || 'Beginner'}
                         </span>
+                        {subject.language && subject.language !== 'English' && (
+                            <span style={{
+                                fontSize: '0.6875rem',
+                                fontWeight: 600,
+                                color: '#8b5cf6',
+                                background: 'rgba(139,92,247,0.1)',
+                                padding: '4px 10px',
+                                borderRadius: 20,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                            }}>
+                                {LANG_FLAGS[subject.language] || '🌐'} {subject.language}
+                            </span>
+                        )}
                         {onDelete && (
                             <button
                                 title="Delete subject"
@@ -150,23 +170,60 @@ export default function SubjectCard({ subject, onDelete }) {
                     </div>
                 </div>
 
-                {/* CTA */}
-                <button
-                    className="btn-primary"
-                    style={{
-                        width: '100%',
-                        background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
-                        padding: '10px',
-                        fontSize: '0.8125rem',
-                    }}
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/subjects/${subject.id}`);
-                    }}
-                >
-                    <Play size={16} />
-                    Start Learning
-                </button>
+                {/* CTA Row */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn-primary"
+                        style={{
+                            flex: 1,
+                            background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})`,
+                            padding: '10px',
+                            fontSize: '0.8125rem',
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // Record streak activity when user starts learning
+                            apiFetch('/api/user/streak', { method: 'POST' }).catch(() => { });
+                            router.push(`/subjects/${subject.id}`);
+                        }}
+                    >
+                        <Play size={16} />
+                        Learn
+                    </button>
+                    <button
+                        style={{
+                            flex: 1,
+                            padding: '10px',
+                            fontSize: '0.8125rem',
+                            fontWeight: 600,
+                            borderRadius: 'var(--radius-md)',
+                            border: `1.5px solid ${colors[0]}30`,
+                            background: `${colors[0]}08`,
+                            color: colors[0],
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            transition: 'all 0.2s',
+                        }}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/subjects/${subject.id}/homework`);
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.background = `${colors[0]}15`;
+                            e.currentTarget.style.borderColor = `${colors[0]}50`;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = `${colors[0]}08`;
+                            e.currentTarget.style.borderColor = `${colors[0]}30`;
+                        }}
+                    >
+                        <ImagePlus size={16} />
+                        Homework
+                    </button>
+                </div>
             </div>
         </div>
     );

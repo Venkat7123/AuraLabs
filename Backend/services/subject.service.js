@@ -1,3 +1,6 @@
+import { supabaseAdmin } from '../config/supabase.js'
+import { generateContentForSubject } from './content.service.js'
+
 export const createSubject = async (supabase, userId, body) => {
   const { syllabus, ...subjectData } = body
 
@@ -25,8 +28,18 @@ export const createSubject = async (supabase, userId, body) => {
     if (topicError) throw topicError
   }
 
-  // Return subject with topics joined
-  return getSubject(supabase, userId, subject.id)
+  // Get the full subject with topics to return immediately
+  const result = await getSubject(supabase, userId, subject.id)
+
+  // Fire-and-forget: generate AI content in background
+  generateContentForSubject(supabaseAdmin, {
+    subjectId: subject.id,
+    subjectName: subject.name,
+    language: subjectData.language || 'English',
+    userId
+  }).catch(err => console.error('Background content generation failed:', err.message))
+
+  return result
 }
 
 export const getSubjects = async (supabase, userId) => {
@@ -89,4 +102,50 @@ export const deleteSubject = async (supabase, userId, id) => {
     .eq('user_id', userId)
 
   if (error) throw error
+}
+
+export const resetAndUpdateSubject = async (supabase, userId, id, body) => {
+  const { syllabus, ...subjectData } = body
+
+  // 1. Update subject fields
+  const { error: updateError } = await supabase
+    .from('subjects')
+    .update(subjectData)
+    .eq('id', id)
+    .eq('user_id', userId)
+
+  if (updateError) throw updateError
+
+  // 2. Delete all existing topics (cascade deletes topic_contents, quiz_questions)
+  const { error: deleteError } = await supabase
+    .from('topics')
+    .delete()
+    .eq('subject_id', id)
+
+  if (deleteError) throw deleteError
+
+  // 3. Insert new topics from syllabus
+  if (syllabus?.length) {
+    const topics = syllabus.map((t, index) => ({
+      subject_id: id,
+      title: t.title,
+      topic_order: index
+    }))
+
+    const { error: topicError } = await supabase.from('topics').insert(topics)
+    if (topicError) throw topicError
+  }
+
+  // 4. Get refreshed subject with topics
+  const result = await getSubject(supabase, userId, id)
+
+  // 5. Fire-and-forget: generate AI content in background
+  generateContentForSubject(supabaseAdmin, {
+    subjectId: id,
+    subjectName: subjectData.name || result.name,
+    language: subjectData.language || result.language || 'English',
+    userId
+  }).catch(err => console.error('Background content generation failed:', err.message))
+
+  return result
 }

@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, PanelLeftClose, PanelRightClose, ChevronRight, BookOpen, Languages, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, PanelLeftClose, PanelRightClose, ChevronRight, BookOpen } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
-const LANGUAGES = [
-    { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'ta', name: 'தமிழ்', flag: '🇮🇳' },
-    { code: 'hi', name: 'हिंदी', flag: '🇮🇳' },
-    { code: 'kn', name: 'ಕನ್ನಡ', flag: '🇮🇳' },
-    { code: 'te', name: 'తెలుగు', flag: '🇮🇳' },
-];
+const LANG_CODE_MAP = {
+    'English': 'en', 'Tamil': 'ta', 'Hindi': 'hi', 'Kannada': 'kn', 'Telugu': 'te',
+};
+const LANG_NAME_MAP = {
+    'en': 'English', 'ta': 'Tamil', 'hi': 'Hindi', 'kn': 'Kannada', 'te': 'Telugu',
+};
+
 import LeftPanel from '@/components/playground/LeftPanel';
 import CenterPanel from '@/components/playground/CenterPanel';
 import RightPanel from '@/components/playground/RightPanel';
@@ -27,7 +27,6 @@ export default function PlaygroundPage() {
     const [activeMode, setActiveMode] = useState('explain');
     const [mounted, setMounted] = useState(false);
     const [language, setLanguage] = useState('en');
-    const [showLangDropdown, setShowLangDropdown] = useState(false);
 
     // Panel widths (percentages)
     const [leftWidth, setLeftWidth] = useState(20);
@@ -56,6 +55,9 @@ export default function PlaygroundPage() {
                 const data = await apiFetch(`/api/subjects/${id}`);
                 if (!data) { router.push('/dashboard'); return; }
                 setSubject(data);
+
+                // Initialize language from subject's saved language
+                setLanguage(LANG_CODE_MAP[data.language] || 'en');
 
                 // Find first non-passed topic
                 const topics = data.topics || [];
@@ -113,7 +115,7 @@ export default function PlaygroundPage() {
             // Mark topic as passed on backend
             await apiFetch(`/api/topics/${topic.id}/pass`, { method: 'POST' });
             // Record streak activity
-            await apiFetch('/api/user/streak', { method: 'POST' }).catch(() => {});
+            await apiFetch('/api/user/streak', { method: 'POST' }).catch(() => { });
             // Update local state
             setSubject(prev => {
                 if (!prev) return prev;
@@ -133,6 +135,14 @@ export default function PlaygroundPage() {
                 return { ...prev, topics: newTopics };
             });
         }
+
+        // Auto-advance to next topic after a short delay
+        setTimeout(() => {
+            if (topicIdx < topics.length - 1) {
+                setCurrentTopicIdx(topicIdx + 1);
+                setActiveMode('explain');
+            }
+        }, 2500);
     }, [subject]);
 
     const handleSelectTopic = useCallback((idx) => {
@@ -174,8 +184,8 @@ export default function PlaygroundPage() {
                 </div>
                 <div style={{ height: 'calc(100vh - 64px - 48px)' }}>
                     {mobilePanel === 'left' && <LeftPanel subject={subject} currentTopicIdx={currentTopicIdx} onSelectTopic={handleSelectTopic} />}
-                    {mobilePanel === 'center' && <CenterPanel subject={subject} currentTopicIdx={currentTopicIdx} activeMode={activeMode} setActiveMode={setActiveMode} onQuizPass={handleQuizPass} />}
-                    {mobilePanel === 'right' && <RightPanel subject={subject} currentTopic={currentTopic} activeMode={activeMode} />}
+                    {mobilePanel === 'center' && <CenterPanel subject={subject} currentTopicIdx={currentTopicIdx} activeMode={activeMode} setActiveMode={setActiveMode} onQuizPass={handleQuizPass} language={language} languageName={LANG_NAME_MAP[language] || 'English'} />}
+                    {mobilePanel === 'right' && <RightPanel subject={subject} currentTopic={currentTopic} activeMode={activeMode} language={language} languageName={LANG_NAME_MAP[language] || 'English'} />}
                 </div>
             </div>
         );
@@ -246,58 +256,7 @@ export default function PlaygroundPage() {
                         <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', minWidth: 28, textAlign: 'right' }}>{progress}%</span>
                     </div>
 
-                    {/* Language Selector */}
-                    <div style={{ position: 'relative' }}>
-                        <button
-                            onClick={() => setShowLangDropdown(!showLangDropdown)}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '5px 10px', borderRadius: 20,
-                                background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
-                                cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500,
-                                color: 'var(--text-secondary)', transition: 'all 0.2s',
-                            }}
-                        >
-                            <Languages size={13} style={{ color: 'var(--accent)' }} />
-                            <span>{LANGUAGES.find(l => l.code === language)?.flag}</span>
-                            <span style={{ maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {LANGUAGES.find(l => l.code === language)?.name}
-                            </span>
-                            <ChevronDown size={11} style={{ opacity: 0.5 }} />
-                        </button>
 
-                        {showLangDropdown && (
-                            <>
-                                <div style={{ position: 'fixed', inset: 0, zIndex: 98 }} onClick={() => setShowLangDropdown(false)} />
-                                <div style={{
-                                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 99,
-                                    background: 'var(--bg-card)', border: '1px solid var(--border-color)',
-                                    borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)',
-                                    overflow: 'hidden', width: 180,
-                                    animation: 'fadeIn 0.15s ease-out',
-                                }}>
-                                    {LANGUAGES.map(lang => (
-                                        <button
-                                            key={lang.code}
-                                            onClick={() => { setLanguage(lang.code); setShowLangDropdown(false); }}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                                                padding: '9px 14px', border: 'none', cursor: 'pointer',
-                                                background: language === lang.code ? 'rgba(99,102,241,0.08)' : 'transparent',
-                                                color: language === lang.code ? 'var(--accent)' : 'var(--text-primary)',
-                                                fontSize: '0.8125rem', fontWeight: language === lang.code ? 600 : 400,
-                                                transition: 'background 0.15s',
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '1rem' }}>{lang.flag}</span>
-                                            {lang.name}
-                                            {language === lang.code && <CheckCircle2 size={13} style={{ marginLeft: 'auto', color: 'var(--accent)' }} />}
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
 
                     {/* Divider */}
                     <div style={{ width: 1, height: 22, background: 'var(--border-color)' }} />
@@ -337,7 +296,7 @@ export default function PlaygroundPage() {
                 <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                     <CenterPanel subject={subject} currentTopicIdx={currentTopicIdx}
                         activeMode={activeMode} setActiveMode={setActiveMode} onQuizPass={handleQuizPass}
-                        language={language} />
+                        language={language} languageName={LANG_NAME_MAP[language] || 'English'} />
                 </div>
 
                 {/* Right */}
@@ -348,7 +307,7 @@ export default function PlaygroundPage() {
                             width: `${effectiveRight}%`, flexShrink: 0,
                             overflow: 'hidden', borderLeft: '1px solid var(--border-color)',
                         }}>
-                            <RightPanel subject={subject} currentTopic={currentTopic} activeMode={activeMode} />
+                            <RightPanel subject={subject} currentTopic={currentTopic} activeMode={activeMode} language={language} languageName={LANG_NAME_MAP[language] || 'English'} />
                         </div>
                     </>
                 )}

@@ -1,18 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     ArrowLeft, ArrowRight, Check, BookOpen, Target, Clock,
     BarChart3, Zap, Upload, Sparkles, GripVertical, Pencil, Trash2,
-    Plus
+    Plus, Languages
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/utils/api';
+import { apiFetch, apiUpload } from '@/utils/api';
 
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 const INTENSITIES = ['Casual', 'Regular', 'Intensive', 'Hardcore'];
+const LANGUAGES = [
+    { code: 'English', label: 'English', flag: '🇬🇧' },
+    { code: 'Tamil', label: 'தமிழ் (Tamil)', flag: '🇮🇳' },
+    { code: 'Telugu', label: 'తెలుగు (Telugu)', flag: '🇮🇳' },
+    { code: 'Kannada', label: 'ಕನ್ನಡ (Kannada)', flag: '🇮🇳' },
+    { code: 'Hindi', label: 'हिंदी (Hindi)', flag: '🇮🇳' },
+];
 
 // simple client-side id generator for local topic items (UI only)
 const genId = () =>
@@ -27,6 +34,7 @@ export default function AddSubjectPage() {
     const [form, setForm] = useState({
         name: '',
         need: '',
+        language: 'English',
         duration: 4,
         level: 'Beginner',
         intensity: 'Regular',
@@ -39,6 +47,10 @@ export default function AddSubjectPage() {
     const [dragIdx, setDragIdx] = useState(-1);
     const [generating, setGenerating] = useState(false);
     const [genError, setGenError] = useState('');
+    const [pdfFile, setPdfFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState('');
+    const fileInputRef = useRef(null);
     const { user, loading: authLoading } = useAuth();
 
     useEffect(() => {
@@ -63,6 +75,7 @@ export default function AddSubjectPage() {
                     duration: form.duration,
                     level: form.level,
                     intensity: form.intensity,
+                    language: form.language,
                 }),
             });
             if (!Array.isArray(topics) || topics.length === 0) {
@@ -84,10 +97,36 @@ export default function AddSubjectPage() {
         }
     };
 
+    const handlePDFUpload = async () => {
+        if (!pdfFile) return;
+        setUploading(true);
+        setUploadError('');
+        try {
+            const data = await apiUpload('/api/pdf/upload-pdf', pdfFile);
+            if (!Array.isArray(data.syllabus) || data.syllabus.length === 0) {
+                throw new Error('No topics extracted from PDF.');
+            }
+            setForm({
+                ...form,
+                syllabus: data.syllabus.map((t, i) => ({
+                    id: genId(),
+                    title: t.title,
+                    order: i,
+                })),
+            });
+        } catch (err) {
+            console.error('PDF upload failed:', err);
+            setUploadError(err.message || 'Failed to process PDF. Please try again.');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleSave = async () => {
         const subject = {
             name: form.name,
             need: form.need,
+            language: form.language,
             duration: form.duration,
             level: form.level,
             intensity: form.intensity,
@@ -95,13 +134,10 @@ export default function AddSubjectPage() {
         };
 
         try {
-            await Promise.all([
-                apiFetch('/api/subjects', {
-                    method: 'POST',
-                    body: JSON.stringify(subject),
-                }),
-                apiFetch('/api/user/streak', { method: 'POST' }),
-            ]);
+            await apiFetch('/api/subjects', {
+                method: 'POST',
+                body: JSON.stringify(subject),
+            });
             router.push('/dashboard');
         } catch (error) {
             console.error('Failed to save subject:', error);
@@ -221,6 +257,50 @@ export default function AddSubjectPage() {
                                     rows={3}
                                     style={{ resize: 'vertical', minHeight: 80 }}
                                 />
+                            </div>
+
+                            {/* Language Selector */}
+                            <div style={{ marginTop: 20 }}>
+                                <label style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.8125rem',
+                                    fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 10,
+                                }}>
+                                    <Languages size={16} /> Study Language
+                                </label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                                    {LANGUAGES.map(lang => (
+                                        <button
+                                            key={lang.code}
+                                            onClick={() => setForm({ ...form, language: lang.code })}
+                                            style={{
+                                                padding: '10px 4px',
+                                                borderRadius: 'var(--radius-sm)',
+                                                border: `2px solid ${form.language === lang.code ? 'var(--accent)' : 'var(--border-color)'}`,
+                                                background: form.language === lang.code ? 'rgba(99,102,241,0.08)' : 'var(--bg-secondary)',
+                                                color: form.language === lang.code ? 'var(--accent)' : 'var(--text-secondary)',
+                                                fontWeight: form.language === lang.code ? 600 : 400,
+                                                fontSize: '0.75rem',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                gap: 4,
+                                            }}
+                                        >
+                                            <span style={{ fontSize: '1.25rem' }}>{lang.flag}</span>
+                                            {lang.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p style={{
+                                    fontSize: '0.6875rem',
+                                    color: 'var(--text-muted)',
+                                    marginTop: 8,
+                                    fontStyle: 'italic',
+                                }}>
+                                    💡 You can change this later from the subject dashboard
+                                </p>
                             </div>
                         </div>
                     )}
@@ -535,37 +615,215 @@ export default function AddSubjectPage() {
                             )}
 
                             {form.syllabusMode === 'upload' && (
-                                <div style={{
-                                    border: '2px dashed var(--border-color)',
-                                    borderRadius: 'var(--radius-lg)',
-                                    padding: '48px 24px',
-                                    textAlign: 'center',
-                                    cursor: 'pointer',
-                                    transition: 'border-color 0.2s',
-                                }}
-                                    onDragOver={e => {
-                                        e.preventDefault();
-                                        e.currentTarget.style.borderColor = 'var(--accent)';
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".pdf"
+                                        style={{ display: 'none' }}
+                                        onChange={e => {
+                                            const file = e.target.files?.[0];
+                                            if (file) { setPdfFile(file); setUploadError(''); }
+                                        }}
+                                    />
+                                    <div style={{
+                                        border: `2px dashed ${pdfFile ? 'var(--accent)' : 'var(--border-color)'}`,
+                                        borderRadius: 'var(--radius-lg)',
+                                        padding: '48px 24px',
+                                        textAlign: 'center',
+                                        cursor: 'pointer',
+                                        transition: 'border-color 0.2s',
+                                        background: pdfFile ? 'rgba(99,102,241,0.04)' : 'transparent',
                                     }}
-                                    onDragLeave={e => {
-                                        e.currentTarget.style.borderColor = 'var(--border-color)';
-                                    }}
-                                >
-                                    <Upload size={40} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
-                                    <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                                        Drop your PDF here
-                                    </p>
-                                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-                                        or click to browse
-                                    </p>
-                                    <button className="btn-secondary" onClick={() => {
-                                        // Simulate PDF upload — generate syllabus
-                                        generateSyllabus();
-                                    }}>
-                                        <Upload size={14} />
-                                        Browse Files
-                                    </button>
-                                </div>
+                                        onClick={() => !uploading && fileInputRef.current?.click()}
+                                        onDragOver={e => {
+                                            e.preventDefault();
+                                            e.currentTarget.style.borderColor = 'var(--accent)';
+                                        }}
+                                        onDragLeave={e => {
+                                            e.currentTarget.style.borderColor = pdfFile ? 'var(--accent)' : 'var(--border-color)';
+                                        }}
+                                        onDrop={e => {
+                                            e.preventDefault();
+                                            e.currentTarget.style.borderColor = 'var(--accent)';
+                                            const file = e.dataTransfer.files?.[0];
+                                            if (file && file.type === 'application/pdf') {
+                                                setPdfFile(file);
+                                                setUploadError('');
+                                            } else {
+                                                setUploadError('Please drop a valid PDF file.');
+                                            }
+                                        }}
+                                    >
+                                        {uploading ? (
+                                            <>
+                                                <div style={{
+                                                    width: 40, height: 40, margin: '0 auto 16px',
+                                                    border: '3px solid var(--border-color)',
+                                                    borderTopColor: 'var(--accent)',
+                                                    borderRadius: '50%',
+                                                    animation: 'spin 0.8s linear infinite',
+                                                }} />
+                                                <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                                    Uploading & extracting syllabus...
+                                                </p>
+                                            </>
+                                        ) : pdfFile ? (
+                                            <>
+                                                <div style={{
+                                                    width: 48, height: 48, borderRadius: 12,
+                                                    background: 'rgba(99,102,241,0.1)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    margin: '0 auto 12px',
+                                                }}>
+                                                    <Upload size={24} style={{ color: 'var(--accent)' }} />
+                                                </div>
+                                                <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                                                    {pdfFile.name}
+                                                </p>
+                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+                                                    {(pdfFile.size / 1024).toFixed(1)} KB · Click to change
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload size={40} style={{ color: 'var(--text-muted)', marginBottom: 16 }} />
+                                                <p style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                                                    Drop your PDF here
+                                                </p>
+                                                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+                                                    or click to browse
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {uploadError && (
+                                        <div style={{
+                                            background: 'rgba(239,68,68,0.08)',
+                                            border: '1px solid rgba(239,68,68,0.25)',
+                                            borderRadius: 'var(--radius-md)',
+                                            padding: '12px 16px',
+                                            marginTop: 12,
+                                            fontSize: '0.8125rem',
+                                            color: '#ef4444',
+                                        }}>
+                                            {uploadError}
+                                        </div>
+                                    )}
+
+                                    {pdfFile && !uploading && form.syllabus.length === 0 && (
+                                        <button
+                                            className="btn-primary"
+                                            onClick={(e) => { e.stopPropagation(); handlePDFUpload(); }}
+                                            style={{ marginTop: 16, width: '100%', padding: '12px 24px' }}
+                                        >
+                                            <Sparkles size={16} />
+                                            Upload & Generate Syllabus
+                                        </button>
+                                    )}
+
+                                    {/* Show generated topics from PDF */}
+                                    {form.syllabus.length > 0 && (
+                                        <div style={{ marginTop: 20 }}>
+                                            {form.syllabus.map((topic, idx) => (
+                                                <div
+                                                    key={topic.id}
+                                                    draggable
+                                                    onDragStart={() => handleDragStart(idx)}
+                                                    onDragOver={(e) => handleDragOver(e, idx)}
+                                                    onDragEnd={handleDragEnd}
+                                                    className="timeline-item"
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 12,
+                                                        opacity: dragIdx === idx ? 0.5 : 1,
+                                                        transition: 'opacity 0.2s',
+                                                    }}
+                                                >
+                                                    <GripVertical size={16} style={{
+                                                        color: 'var(--text-muted)',
+                                                        cursor: 'grab',
+                                                        flexShrink: 0,
+                                                    }} />
+                                                    {editingIdx === idx ? (
+                                                        <input
+                                                            className="input"
+                                                            value={editText}
+                                                            onChange={e => setEditText(e.target.value)}
+                                                            onBlur={() => {
+                                                                if (editText.trim()) {
+                                                                    const s = [...form.syllabus];
+                                                                    s[idx] = { ...s[idx], title: editText.trim() };
+                                                                    setForm({ ...form, syllabus: s });
+                                                                }
+                                                                setEditingIdx(-1);
+                                                            }}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') e.target.blur();
+                                                            }}
+                                                            autoFocus
+                                                            style={{ flex: 1, padding: '8px 12px', fontSize: '0.875rem' }}
+                                                        />
+                                                    ) : (
+                                                        <span style={{
+                                                            flex: 1,
+                                                            fontSize: '0.875rem',
+                                                            color: 'var(--text-primary)',
+                                                        }}>{topic.title}</span>
+                                                    )}
+                                                    <button
+                                                        className="btn-ghost"
+                                                        onClick={() => {
+                                                            setEditingIdx(idx);
+                                                            setEditText(topic.title);
+                                                        }}
+                                                        style={{ padding: 6 }}
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                    <button
+                                                        className="btn-ghost"
+                                                        onClick={() => deleteTopic(idx)}
+                                                        style={{ padding: 6, color: 'var(--danger)' }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+
+                                            {/* Add topic */}
+                                            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                                                <input
+                                                    className="input"
+                                                    placeholder="Add a topic..."
+                                                    value={newTopic}
+                                                    onChange={e => setNewTopic(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') addTopic(); }}
+                                                    style={{ flex: 1, padding: '8px 12px', fontSize: '0.8125rem' }}
+                                                />
+                                                <button className="btn-secondary" onClick={addTopic} style={{ padding: '8px 16px' }}>
+                                                    <Plus size={16} />
+                                                </button>
+                                            </div>
+
+                                            <button
+                                                className="btn-ghost"
+                                                onClick={() => {
+                                                    setForm({ ...form, syllabus: [] });
+                                                    setPdfFile(null);
+                                                    setUploadError('');
+                                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                                }}
+                                                style={{ marginTop: 12, fontSize: '0.8125rem' }}
+                                            >
+                                                <Upload size={14} />
+                                                Upload Different PDF
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
@@ -593,6 +851,7 @@ export default function AddSubjectPage() {
                                 {[
                                     { label: 'Subject', value: form.name },
                                     { label: 'Goal', value: form.need || 'Not specified' },
+                                    { label: 'Language', value: `${LANGUAGES.find(l => l.code === form.language)?.flag || ''} ${form.language}` },
                                     { label: 'Duration', value: `${form.duration} weeks` },
                                     { label: 'Level', value: form.level },
                                     { label: 'Intensity', value: form.intensity },

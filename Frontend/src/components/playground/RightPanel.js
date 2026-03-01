@@ -3,34 +3,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Send, MessageSquarePlus, History, X, Pencil, Trash2,
-    Image as ImageIcon, Sparkles, Bot
+    Sparkles, Bot
 } from 'lucide-react';
+import { apiFetch } from '@/utils/api';
 
-function simulateAIResponse(userMsg, topic, mode) {
-    const responses = {
-        explain: [
-            `Great question about **${topic}**! The key thing to understand is that this concept builds upon fundamental principles. Once you grasp the underlying pattern, everything else falls into place.`,
-            `Let me break that down. In the context of **${topic}**, you're essentially dealing with a structured approach that follows the pattern: define → implement → verify.`,
-            `That's a common point of confusion! Think of **${topic}** like building blocks — each piece depends on understanding the one before it. Let me explain it differently...`,
-        ],
-        demonstrate: [
-            `Here's how that works in practice:\n\n\`\`\`\nStep 1: Set up the environment\nStep 2: Apply the concept\nStep 3: Verify the result\n\`\`\`\n\nDoes that help clarify?`,
-        ],
-        try: [
-            `Good attempt! You're on the right track. Consider how **${topic}** relates to the broader pattern we discussed. What would happen if you also considered edge cases?`,
-        ],
-        test: [
-            `Stay focused on the quiz! You can ask me for help after you've completed it. Good luck! 🍀`,
-        ],
-        apply: [
-            `That's a great real-world application! **${topic}** is indeed used that way in industry. You could take it further by...`,
-        ],
-    };
-    const pool = responses[mode] || responses.explain;
-    return pool[Math.floor(Math.random() * pool.length)];
-}
-
-export default function RightPanel({ subject, currentTopic, activeMode }) {
+export default function RightPanel({ subject, currentTopic, activeMode, language = 'en', languageName = 'English' }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [threads, setThreads] = useState([]);
@@ -41,49 +18,66 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
     const [editName, setEditName] = useState('');
     const messagesEndRef = useRef(null);
 
+    const subjectId = subject?.id;
+    const subjectName = subject?.name || '';
+
+    // Load threads when subject changes
     useEffect(() => {
-        // In mock mode we don't load threads from a backend.
-        setThreads([]);
-    }, [subject?.id]);
+        if (!subjectId) return;
+        const loadThreads = async () => {
+            try {
+                const data = await apiFetch(`/api/chat/threads/${subjectId}`);
+                setThreads(data || []);
+            } catch (err) {
+                console.error('Failed to load threads:', err);
+            }
+        };
+        loadThreads();
+    }, [subjectId]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isTyping]);
 
     const sendMessage = useCallback(async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || isTyping) return;
         const userMsg = { role: 'user', content: input.trim(), time: Date.now() };
         const newMessages = [...messages, userMsg];
         setMessages(newMessages);
+        const currentInput = input.trim();
         setInput('');
         setIsTyping(true);
 
-        // Simulate AI
-        setTimeout(() => {
-            const aiContent = simulateAIResponse(input, currentTopic, activeMode);
-            const aiMsg = { role: 'ai', content: aiContent, time: Date.now() };
-            const final = [...newMessages, aiMsg];
-            setMessages(final);
-            setIsTyping(false);
-            const chatId = activeThread || `t-${Date.now()}`;
-            const threadName =
-                activeThread
-                    ? threads.find(t => t.id === activeThread)?.name || `Chat about ${currentTopic}`
-                    : `Chat about ${currentTopic}`;
-
-            setThreads(prev => {
-                const existing = prev.find(t => t.id === chatId);
-                if (existing) {
-                    return prev.map(t => t.id === chatId ? { ...t, messages: final } : t);
-                }
-                return [...prev, { id: chatId, name: threadName, messages: final }];
+        try {
+            const res = await apiFetch('/api/chat/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                    threadId: activeThread,
+                    subjectId,
+                    message: currentInput,
+                    topicTitle: currentTopic,
+                    subjectName,
+                    mode: activeMode,
+                    language: languageName
+                })
             });
 
-            if (!activeThread) {
-                setActiveThread(chatId);
+            const aiMsg = { role: 'ai', content: res.response, time: Date.now() };
+            setMessages(prev => [...prev, aiMsg]);
+
+            // If new thread was created, update state
+            if (!activeThread && res.threadId) {
+                setActiveThread(res.threadId);
+                setThreads(prev => [{ id: res.threadId, name: res.threadName || currentInput.substring(0, 50), updated_at: new Date().toISOString() }, ...prev]);
             }
-        }, 600 + Math.random() * 800);
-    }, [input, messages, activeThread, threads, currentTopic, activeMode]);
+        } catch (err) {
+            console.error('Chat error:', err);
+            const errorMsg = { role: 'ai', content: '⚠️ Sorry, something went wrong. Please try again.', time: Date.now() };
+            setMessages(prev => [...prev, errorMsg]);
+        } finally {
+            setIsTyping(false);
+        }
+    }, [input, messages, activeThread, currentTopic, activeMode, subjectId, subjectName, languageName, isTyping]);
 
     const newChat = () => {
         setMessages([]);
@@ -91,33 +85,64 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
         setShowHistory(false);
     };
 
-    const selectThread = (thread) => {
-        setMessages(thread.messages || []);
-        setActiveThread(thread.id);
+    const selectThread = async (thread) => {
         setShowHistory(false);
+        setActiveThread(thread.id);
+        try {
+            const data = await apiFetch(`/api/chat/messages/${thread.id}`);
+            setMessages((data || []).map(m => ({ role: m.role, content: m.content, time: new Date(m.created_at).getTime() })));
+        } catch (err) {
+            console.error('Failed to load messages:', err);
+        }
     };
 
     const removeThread = async (threadId) => {
-        setThreads(prev => prev.filter(t => t.id !== threadId));
-        if (activeThread === threadId) {
-            setMessages([]);
-            setActiveThread(null);
+        try {
+            await apiFetch(`/api/chat/threads/${threadId}`, { method: 'DELETE' });
+            setThreads(prev => prev.filter(t => t.id !== threadId));
+            if (activeThread === threadId) {
+                setMessages([]);
+                setActiveThread(null);
+            }
+        } catch (err) {
+            console.error('Failed to delete thread:', err);
         }
     };
 
     const renameThread = async (threadId) => {
         if (!editName.trim()) return;
-        const thread = threads.find(t => t.id === threadId);
-        if (thread) {
+        try {
+            await apiFetch(`/api/chat/threads/${threadId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ name: editName.trim() })
+            });
             setThreads(prev => prev.map(t => t.id === threadId ? { ...t, name: editName.trim() } : t));
+        } catch (err) {
+            console.error('Failed to rename thread:', err);
         }
         setEditingId(null);
         setEditName('');
     };
 
-    const generateInfographic = () => {
-        const msg = { role: 'ai', content: `📊 **Infographic Generated!**\n\nI've created a visual summary of **${currentTopic}** covering the key concepts, relationships, and important points. You can find it in the Library panel on the left.`, time: Date.now() };
-        setMessages(prev => [...prev, msg]);
+    const renderMarkdown = (text) => {
+        return text.split('\n').map((line, j) => {
+            if (line.startsWith('```')) return null;
+            const parts = line.split(/(\*\*.*?\*\*|`.*?`)/g);
+            return (
+                <p key={j} style={{ margin: j > 0 ? '6px 0 0' : 0 }}>
+                    {parts.map((part, k) => {
+                        if (part.startsWith('**') && part.endsWith('**'))
+                            return <strong key={k}>{part.slice(2, -2)}</strong>;
+                        if (part.startsWith('`') && part.endsWith('`'))
+                            return <code key={k} style={{
+                                background: 'var(--bg-card)',
+                                padding: '1px 6px', borderRadius: 4, fontSize: '0.8rem',
+                            }}>{part.slice(1, -1)}</code>;
+                        return part;
+                    })}
+                </p>
+            );
+        });
     };
 
     return (
@@ -144,13 +169,6 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
                     </span>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                    <button onClick={generateInfographic} title="Generate Infographic"
-                        style={{
-                            padding: '6px', borderRadius: 'var(--radius-sm)', background: 'transparent',
-                            border: 'none', cursor: 'pointer', color: 'var(--text-muted)', transition: 'all 0.2s',
-                        }}>
-                        <ImageIcon size={16} />
-                    </button>
                     <button onClick={() => setShowHistory(!showHistory)} title="Chat History"
                         style={{
                             padding: '6px', borderRadius: 'var(--radius-sm)',
@@ -274,24 +292,7 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
                                 color: 'var(--text-primary)', borderBottomLeftRadius: 4,
                             }),
                         }}>
-                            {msg.content.split('\n').map((line, j) => {
-                                if (line.startsWith('```')) return null;
-                                const parts = line.split(/(\*\*.*?\*\*|\`.*?\`)/g);
-                                return (
-                                    <p key={j} style={{ margin: j > 0 ? '6px 0 0' : 0 }}>
-                                        {parts.map((part, k) => {
-                                            if (part.startsWith('**') && part.endsWith('**'))
-                                                return <strong key={k}>{part.slice(2, -2)}</strong>;
-                                            if (part.startsWith('`') && part.endsWith('`'))
-                                                return <code key={k} style={{
-                                                    background: msg.role === 'user' ? 'rgba(255,255,255,0.15)' : 'var(--bg-card)',
-                                                    padding: '1px 6px', borderRadius: 4, fontSize: '0.8rem',
-                                                }}>{part.slice(1, -1)}</code>;
-                                            return part;
-                                        })}
-                                    </p>
-                                );
-                            })}
+                            {msg.role === 'user' ? <p>{msg.content}</p> : renderMarkdown(msg.content)}
                         </div>
                     </div>
                 ))}
@@ -334,6 +335,7 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && sendMessage()}
                         placeholder="Type your message..."
+                        disabled={isTyping}
                         style={{
                             flex: 1, background: 'transparent', border: 'none', outline: 'none',
                             fontSize: '0.8125rem', color: 'var(--text-primary)', padding: '8px 0',
@@ -341,16 +343,16 @@ export default function RightPanel({ subject, currentTopic, activeMode }) {
                     />
                     <button
                         onClick={sendMessage}
-                        disabled={!input.trim()}
+                        disabled={!input.trim() || isTyping}
                         style={{
                             width: 34, height: 34, borderRadius: '50%',
-                            background: input.trim() ? 'linear-gradient(135deg, var(--gradient-start), var(--gradient-end))' : 'var(--bg-card)',
-                            border: 'none', cursor: input.trim() ? 'pointer' : 'default',
+                            background: input.trim() && !isTyping ? 'linear-gradient(135deg, var(--gradient-start), var(--gradient-end))' : 'var(--bg-card)',
+                            border: 'none', cursor: input.trim() && !isTyping ? 'pointer' : 'default',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             transition: 'all 0.2s', flexShrink: 0,
                         }}
                     >
-                        <Send size={14} style={{ color: input.trim() ? 'white' : 'var(--text-muted)' }} />
+                        <Send size={14} style={{ color: input.trim() && !isTyping ? 'white' : 'var(--text-muted)' }} />
                     </button>
                 </div>
             </div>

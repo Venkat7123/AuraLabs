@@ -276,28 +276,51 @@ export default function DashboardPage() {
                             .map(s => (
                                 <SubjectCard key={s.id} subject={s} onDelete={handleDelete} />
                             ))}
+                        {/* Add Subject Card */}
+                        <div
+                            className="card"
+                            onClick={() => router.push('/add')}
+                            style={{
+                                padding: 0,
+                                overflow: 'hidden',
+                                cursor: 'pointer',
+                                border: '2px dashed var(--border-color)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                minHeight: 220,
+                                transition: 'all 0.2s ease',
+                            }}
+                            onMouseEnter={e => {
+                                e.currentTarget.style.borderColor = '#6366f1';
+                                e.currentTarget.style.background = 'rgba(99,102,241,0.04)';
+                            }}
+                            onMouseLeave={e => {
+                                e.currentTarget.style.borderColor = 'var(--border-color)';
+                                e.currentTarget.style.background = '';
+                            }}
+                        >
+                            <div style={{ textAlign: 'center' }}>
+                                <div style={{
+                                    width: 52, height: 52, borderRadius: 16,
+                                    background: 'rgba(99,102,241,0.1)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    margin: '0 auto 14px',
+                                }}>
+                                    <Plus size={26} style={{ color: '#6366f1' }} />
+                                </div>
+                                <p style={{
+                                    fontWeight: 700, fontSize: '0.9375rem',
+                                    color: 'var(--text-primary)', marginBottom: 4,
+                                }}>Add Subject</p>
+                                <p style={{
+                                    fontSize: '0.75rem', color: 'var(--text-muted)',
+                                }}>Start a new learning journey</p>
+                            </div>
+                        </div>
                     </div>
                 )}
             </main>
-
-            {/* FAB (mobile) */}
-            <button
-                className="btn-primary md:hidden"
-                onClick={() => router.push('/add')}
-                style={{
-                    position: 'fixed',
-                    bottom: 24,
-                    right: 24,
-                    width: 56,
-                    height: 56,
-                    borderRadius: '50%',
-                    padding: 0,
-                    boxShadow: 'var(--shadow-lg)',
-                    zIndex: 50,
-                }}
-            >
-                <Plus size={24} />
-            </button>
         </div>
     );
 }

@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { CheckCircle2, Circle, Lock, ChevronDown, ChevronRight, FileText, Image as ImageIcon, BookOpen } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { CheckCircle2, Circle, Lock, ChevronDown, ChevronRight, FileText, Image as ImageIcon, BookOpen, ExternalLink } from 'lucide-react';
+import { apiFetch } from '@/utils/api';
 
 export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
     const [syllabusOpen, setSyllabusOpen] = useState(true);
     const [libraryOpen, setLibraryOpen] = useState(false);
+    const [scanImages, setScanImages] = useState([]);
+    const [libraryLoading, setLibraryLoading] = useState(false);
 
     const topics = subject?.topics || [];
     const progress = useMemo(() => {
@@ -18,6 +21,24 @@ export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
         () => topics.filter(t => t.passed).length,
         [topics]
     );
+
+    // Fetch scan images for library when opened
+    useEffect(() => {
+        if (!libraryOpen || !subject?.id) return;
+        const fetchLibrary = async () => {
+            setLibraryLoading(true);
+            try {
+                const data = await apiFetch(`/api/scan/history/${subject.id}`);
+                const images = (data || []).filter(item => item.image_url);
+                setScanImages(images);
+            } catch (err) {
+                console.error('Failed to fetch library:', err);
+            } finally {
+                setLibraryLoading(false);
+            }
+        };
+        fetchLibrary();
+    }, [libraryOpen, subject?.id]);
 
     return (
         <div style={{
@@ -85,7 +106,8 @@ export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
                         {topics.map((topic, idx) => {
                             const passed = topic.passed;
                             const isCurrent = idx === currentTopicIdx;
-                            const isLocked = idx > currentTopicIdx && !passed;
+                            // A topic is locked if it's not the first AND the previous topic hasn't been passed
+                            const isLocked = idx > 0 && !topics[idx - 1]?.passed && !passed;
 
                             return (
                                 <button
@@ -162,28 +184,62 @@ export default function LeftPanel({ subject, currentTopicIdx, onSelectTopic }) {
                 >
                     {libraryOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     Library
+                    {scanImages.length > 0 && (
+                        <span style={{
+                            marginLeft: 'auto', fontSize: '0.625rem',
+                            background: 'rgba(99,102,241,0.1)', color: 'var(--accent)',
+                            padding: '2px 8px', borderRadius: 10, fontWeight: 700,
+                        }}>{scanImages.length}</span>
+                    )}
                 </button>
 
                 {libraryOpen && (
                     <div style={{ padding: '4px 18px 16px' }}>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
-                            color: 'var(--text-muted)', fontSize: '0.8125rem',
-                        }}>
-                            <FileText size={14} /> PDFs
-                            <span style={{ marginLeft: 'auto', fontSize: '0.6875rem', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 10 }}>
-                                {subject?.library?.pdfs?.length || 0}
-                            </span>
-                        </div>
-                        <div style={{
-                            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
-                            color: 'var(--text-muted)', fontSize: '0.8125rem',
-                        }}>
-                            <ImageIcon size={14} /> Infographics
-                            <span style={{ marginLeft: 'auto', fontSize: '0.6875rem', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 10 }}>
-                                {subject?.library?.infographics?.length || 0}
-                            </span>
-                        </div>
+                        {libraryLoading ? (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center', padding: '16px 0' }}>
+                                Loading...
+                            </p>
+                        ) : scanImages.length === 0 ? (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textAlign: 'center', padding: '16px 0' }}>
+                                No files yet. Upload homework scans to see them here.
+                            </p>
+                        ) : (
+                            <>
+                                {/* Scan Images */}
+                                <div style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0 6px',
+                                    color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700,
+                                    textTransform: 'uppercase', letterSpacing: '0.05em',
+                                }}>
+                                    <ImageIcon size={12} /> Scanned Images
+                                    <span style={{ marginLeft: 'auto', fontSize: '0.625rem', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 10 }}>
+                                        {scanImages.length}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'grid', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                                    {scanImages.map((item, i) => (
+                                        <a key={item.id || i} href={item.image_url} target="_blank" rel="noopener noreferrer"
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 8,
+                                                padding: '6px 8px', borderRadius: 'var(--radius-sm)',
+                                                background: 'var(--bg-secondary)',
+                                                color: 'var(--text-primary)', textDecoration: 'none',
+                                                fontSize: '0.75rem', transition: 'background 0.15s',
+                                            }}
+                                        >
+                                            <img src={item.image_url} alt="" style={{
+                                                width: 28, height: 28, borderRadius: 4, objectFit: 'cover',
+                                                border: '1px solid var(--border-color)',
+                                            }} />
+                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {item.text?.substring(0, 30) || `Scan ${i + 1}`}
+                                            </span>
+                                            <ExternalLink size={10} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                                        </a>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

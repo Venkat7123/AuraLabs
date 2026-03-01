@@ -250,7 +250,11 @@ body {
 .streak-3 { background: rgba(99, 102, 241, 0.75); }
 .streak-4 { background: rgb(99, 102, 241); }
 
-.dark .streak-0 { background: #1e2336; }
+.dark .streak-0 { background: #1a1f2e; }
+.dark .streak-1 { background: rgba(16, 185, 129, 0.2); }
+.dark .streak-2 { background: rgba(16, 185, 129, 0.45); }
+.dark .streak-3 { background: rgba(16, 185, 129, 0.7); }
+.dark .streak-4 { background: rgb(16, 185, 129); }
 
 /* ── Animations ── */
 @keyframes fadeIn {
@@ -295,6 +299,10 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out forwards;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
 }
 
 .animate-slide-up {

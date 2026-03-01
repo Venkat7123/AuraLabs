@@ -10,6 +10,7 @@ const AuthContext = createContext({
     signUp: async () => {},
     signIn: async () => {},
     signOut: async () => {},
+    refreshSession: async () => {},
 });
 
 export const AuthProvider = ({ children }) => {
@@ -63,6 +64,19 @@ export const AuthProvider = ({ children }) => {
         if (error) throw error;
     };
 
+    const refreshSession = async () => {
+        try {
+            const { data, error } = await supabase.auth.refreshSession();
+            if (error) throw error;
+            return data.session;
+        } catch (error) {
+            console.error('Session refresh failed:', error);
+            // If refresh fails, sign out the user
+            await signOut();
+            throw error;
+        }
+    };
+
     const value = {
         user,
         session,
@@ -70,6 +84,7 @@ export const AuthProvider = ({ children }) => {
         signUp,
         signIn,
         signOut,
+        refreshSession,
     };
 
     return (
@@ -79,4 +94,10 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};

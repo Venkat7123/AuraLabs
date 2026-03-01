@@ -2,21 +2,32 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '@/utils/api';
+import { useAuth } from '@/context/AuthContext';
 
 export default function StreakGrid() {
     const [streakData, setStreakData] = useState({});
+    const [error, setError] = useState(null);
+    const { user } = useAuth();
 
     useEffect(() => {
+        if (!user) return;
+        
         const fetchStreak = async () => {
             try {
+                setError(null);
                 const data = await apiFetch('/api/user/streak');
                 setStreakData(data || {});
             } catch (e) {
                 console.error('Failed to fetch streak data:', e);
+                setError(e.message);
+                // If it's auth error, clear the streak data
+                if (e.message.includes('Authentication failed')) {
+                    setStreakData({});
+                }
             }
         };
         fetchStreak();
-    }, []);
+    }, [user]);
 
     const data = useMemo(() => {
         const weeks = 26;
